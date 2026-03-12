@@ -52,8 +52,15 @@ def fill_excel(template_path: str, output_path: str, dop_data: dict) -> str:
 
 
 def _write_cell(ws, cell_ref: str, value):
-    """Scrive un valore in una cella preservando la formattazione esistente."""
+    """Scrive un valore in una cella, gestendo anche le celle unite (merged)."""
+    from openpyxl.cell.cell import MergedCell
     cell = ws[cell_ref]
+    if isinstance(cell, MergedCell):
+        # Trova la cella principale del range unito che contiene cell_ref
+        for merged_range in ws.merged_cells.ranges:
+            if cell.coordinate in merged_range:
+                cell = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
+                break
     cell.value = value
 
 
