@@ -132,6 +132,7 @@ class App(tk.Tk):
         paths = filedialog.askopenfilenames(
             title="Seleziona uno o piu PDF DOP",
             filetypes=[("File PDF", "*.pdf"), ("Tutti i file", "*.*")],
+            multiple=True,
         )
         if paths:
             self.pdf_paths = list(paths)
