@@ -69,11 +69,12 @@ class App(tk.Tk):
 
         # PDF (multipli)
         ttk.Label(files_frame, text="PDF DOP:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.pdf_label = ttk.Label(files_frame, text="Nessun PDF selezionato", width=55, anchor=tk.W)
+        self.pdf_label = ttk.Label(files_frame, text="Nessun PDF selezionato", width=45, anchor=tk.W)
         self.pdf_label.grid(row=0, column=1, padx=5, pady=5)
-        ttk.Button(files_frame, text="Sfoglia...", command=self._browse_pdf).grid(
-            row=0, column=2, pady=5
-        )
+        pdf_btn_frame = tk.Frame(files_frame, bg="#f0f0f0")
+        pdf_btn_frame.grid(row=0, column=2, pady=5)
+        ttk.Button(pdf_btn_frame, text="Aggiungi PDF...", command=self._browse_pdf).pack(side=tk.LEFT, padx=2)
+        ttk.Button(pdf_btn_frame, text="Cancella lista", command=self._clear_pdf_list).pack(side=tk.LEFT, padx=2)
 
         # Excel template
         ttk.Label(files_frame, text="Excel Template:").grid(row=1, column=0, sticky=tk.W, pady=5)
@@ -130,7 +131,7 @@ class App(tk.Tk):
 
     def _browse_pdf(self):
         raw = filedialog.askopenfilenames(
-            title="Seleziona uno o piu PDF DOP",
+            title="Seleziona uno o piu PDF DOP (usa Ctrl+click per piu file)",
             filetypes=[("File PDF", "*.pdf"), ("Tutti i file", "*.*")],
             multiple=True,
         )
@@ -139,13 +140,26 @@ class App(tk.Tk):
             # stringa TCL con graffe (es. "{C:/path con spazi/file.pdf}").
             # tk.splitlist() li gestisce correttamente su tutte le piattaforme.
             paths = list(self.tk.splitlist(raw)) if isinstance(raw, str) else list(raw)
-            self.pdf_paths = paths
-            n = len(self.pdf_paths)
-            if n == 1:
-                self.pdf_label.configure(text=os.path.basename(self.pdf_paths[0]))
-            else:
-                self.pdf_label.configure(text=f"{n} PDF selezionati")
-            self.status_var.set(f"{n} PDF selezionato/i.")
+            # Aggiungi alla lista esistente, evitando duplicati
+            for p in paths:
+                if p not in self.pdf_paths:
+                    self.pdf_paths.append(p)
+            self._update_pdf_label()
+
+    def _clear_pdf_list(self):
+        self.pdf_paths.clear()
+        self.pdf_label.configure(text="Nessun PDF selezionato")
+        self.status_var.set("Lista PDF cancellata.")
+
+    def _update_pdf_label(self):
+        n = len(self.pdf_paths)
+        if n == 0:
+            self.pdf_label.configure(text="Nessun PDF selezionato")
+        elif n == 1:
+            self.pdf_label.configure(text=os.path.basename(self.pdf_paths[0]))
+        else:
+            self.pdf_label.configure(text=f"{n} PDF selezionati")
+        self.status_var.set(f"{n} PDF selezionato/i.")
 
     def _browse_excel(self):
         path = filedialog.askopenfilename(
