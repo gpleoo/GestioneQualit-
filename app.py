@@ -129,12 +129,17 @@ class App(tk.Tk):
         status_bar.pack(fill=tk.X, side=tk.BOTTOM)
 
     def _browse_pdf(self):
-        paths = filedialog.askopenfilenames(
+        raw = filedialog.askopenfilenames(
             title="Seleziona uno o piu PDF DOP",
             filetypes=[("File PDF", "*.pdf"), ("Tutti i file", "*.*")],
+            multiple=True,
         )
-        if paths:
-            self.pdf_paths = list(paths)
+        if raw:
+            # Fix per Windows: percorsi con spazi vengono restituiti come
+            # stringa TCL con graffe (es. "{C:/path con spazi/file.pdf}").
+            # tk.splitlist() li gestisce correttamente su tutte le piattaforme.
+            paths = list(self.tk.splitlist(raw)) if isinstance(raw, str) else list(raw)
+            self.pdf_paths = paths
             n = len(self.pdf_paths)
             if n == 1:
                 self.pdf_label.configure(text=os.path.basename(self.pdf_paths[0]))
