@@ -82,7 +82,7 @@ def fill_excel(
     posizioni = dop_data.get("posizioni", [])
     if distinta_path:
         distinta_set = _get_marcature_from_distinta(distinta_path)
-        posizioni = [p for p in posizioni if p.upper() in distinta_set]
+        posizioni = [p for p in posizioni if _normalize_code(p) in distinta_set]
 
     posizioni_stringa = "-".join(posizioni) if posizioni else ""
     if posizioni_stringa:
@@ -132,24 +132,32 @@ def _parse_date_from_string(value: str) -> datetime | None:
     return None
 
 
+def _normalize_code(code: str) -> str:
+    """Normalizza un codice: uppercase, rimuove spazi e caratteri non alfanumerici."""
+    return re.sub(r"[^A-Z0-9]", "", str(code).upper())
+
+
 def _get_marcature_from_distinta(distinta_path: str) -> set:
     """
     Legge il file Excel 'Distinta Spedizione' e restituisce l'insieme
-    delle marcature presenti nella colonna A.
+    delle marcature presenti nella colonna A (tutti i fogli).
+    Restituisce i codici normalizzati (uppercase, senza spazi/simboli).
     """
     if not distinta_path or not os.path.isfile(distinta_path):
         return set()
     try:
         wb = openpyxl.load_workbook(distinta_path, data_only=True)
-        ws = wb.active
     except Exception:
         return set()
 
     result = set()
-    for row in ws.iter_rows(values_only=True):
-        val = row[0] if row else None
-        if val is not None:
-            result.add(str(val).strip().upper())
+    for ws in wb.worksheets:
+        for row in ws.iter_rows(values_only=True):
+            val = row[0] if row else None
+            if val is not None:
+                normalized = _normalize_code(str(val))
+                if normalized:
+                    result.add(normalized)
     return result
 
 

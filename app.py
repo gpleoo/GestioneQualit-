@@ -19,7 +19,7 @@ from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
 
 from pdf_parser import extract_dop_data
-from excel_filler import fill_excel, get_cell_map
+from excel_filler import fill_excel, get_cell_map, _get_marcature_from_distinta, _normalize_code
 
 
 def _parse_date(date_str: str) -> datetime:
@@ -339,6 +339,36 @@ class App(tk.Tk):
             }
             marcature_path = self.marcature_excel_path.get()
             distinta_path = self.distinta_path.get()
+
+            # Verifica anticipata: se la Distinta è selezionata mostra cosa troverà
+            if distinta_path:
+                distinta_set = _get_marcature_from_distinta(distinta_path)
+                if not distinta_set:
+                    messagebox.showwarning(
+                        "Distinta Spedizione - Nessuna marcatura trovata",
+                        f"Il file Distinta Spedizione non contiene marcature leggibili nella colonna A:\n"
+                        f"{distinta_path}\n\n"
+                        "Verifica che il file sia corretto e non sia aperto in Excel."
+                    )
+                    return
+                else:
+                    empty_pdfs = []
+                    for pdf_path, data in self.dop_data_list:
+                        posizioni_pdf = data.get("posizioni", [])
+                        matched = [p for p in posizioni_pdf if _normalize_code(p) in distinta_set]
+                        if not matched:
+                            empty_pdfs.append(
+                                f"  {os.path.basename(pdf_path)}\n"
+                                f"    PDF: {posizioni_pdf if posizioni_pdf else '(nessuna marcatura trovata nel PDF)'}\n"
+                                f"    Distinta: {sorted(distinta_set)[:20]}"
+                            )
+                    if empty_pdfs:
+                        messagebox.showwarning(
+                            "Distinta Spedizione - Nessuna corrispondenza",
+                            "Per i seguenti PDF nessuna marcatura corrisponde alla Distinta.\n"
+                            "La cella D2 rimarrà vuota per queste schede.\n\n"
+                            + "\n\n".join(empty_pdfs)
+                        )
 
             for idx, (pdf_path, data) in enumerate(self.dop_data_list, start=1):
                 output_name = f"{base_name}_{idx:03d}.xlsx"
