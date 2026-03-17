@@ -6,7 +6,11 @@ Utilizza la modifica diretta dell'XML interno al file xlsx (ZIP)
 per preservare immagini, formule e formattazione del template originale.
 
 Mappatura celle Excel (basata sul template):
-- D2: Elemento assiemato (codici posizione)
+- G2:  Cliente
+- D2:  Elemento assiemato (codici posizione)
+- D3:  N° commessa
+- D4:  Progetto
+- G6:  Data collaudo (più recente dal file Excel marcature)
 - G10: Data controllo (riga 5 - Esame visivo saldature)
 - I14: Data compilazione
 """
@@ -16,20 +20,33 @@ import os
 import re
 import shutil
 import zipfile
+from datetime import datetime
 from xml.etree import ElementTree as ET
+
+import openpyxl
 
 
 # Mappatura celle: chiave = nome campo, valore = cella Excel
 CELL_MAP = {
-    "elemento_assiemato": "D2",   # Codici posizione prodotto
-    "data_controllo": "G10",      # Data nella riga "Esame visivo" (riga 5)
-    "data_compilazione": "I14",   # Data compilazione in fondo
+    "cliente":            "G2",
+    "elemento_assiemato": "D2",
+    "numero_commessa":    "D3",
+    "progetto":           "D4",
+    "data_collaudo":      "G6",
+    "data_controllo":     "G10",
+    "data_compilazione":  "I14",
 }
 
 _NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 
 
-def fill_excel(template_path: str, output_path: str, dop_data: dict) -> str:
+def fill_excel(
+    template_path: str,
+    output_path: str,
+    dop_data: dict,
+    manual_data: dict = None,
+    marcature_excel_path: str = "",
+) -> str:
     """
     Compila il file Excel template con i dati estratti dal PDF DOP.
 
@@ -40,16 +57,34 @@ def fill_excel(template_path: str, output_path: str, dop_data: dict) -> str:
         template_path: Percorso del file Excel template.
         output_path: Percorso dove salvare il file compilato.
         dop_data: Dizionario con i dati estratti dal PDF.
+        manual_data: Dizionario con i campi inseriti manualmente (cliente, numero_commessa, progetto).
+        marcature_excel_path: Percorso del file Excel con colonna A=marcature, D=date.
 
     Returns:
         Percorso del file salvato.
     """
     cells_to_write = {}
+
     if dop_data.get("posizioni_stringa"):
         cells_to_write[CELL_MAP["elemento_assiemato"]] = dop_data["posizioni_stringa"]
     if dop_data.get("data_ddt"):
         cells_to_write[CELL_MAP["data_controllo"]] = dop_data["data_ddt"]
         cells_to_write[CELL_MAP["data_compilazione"]] = dop_data["data_ddt"]
+
+    # Dati inseriti manualmente dall'utente
+    if manual_data:
+        for field in ("cliente", "numero_commessa", "progetto"):
+            val = manual_data.get(field, "").strip()
+            if val:
+                cells_to_write[CELL_MAP[field]] = val
+
+    # Data più recente dal file Excel marcature → G6
+    if marcature_excel_path and dop_data.get("posizioni"):
+        data_collaudo = _get_most_recent_date_from_excel(
+            marcature_excel_path, dop_data["posizioni"]
+        )
+        if data_collaudo:
+            cells_to_write[CELL_MAP["data_collaudo"]] = data_collaudo
 
     # Copia il template preservando tutto (immagini, macro, ecc.)
     shutil.copy2(template_path, output_path)
@@ -58,6 +93,58 @@ def fill_excel(template_path: str, output_path: str, dop_data: dict) -> str:
         _patch_xlsx(output_path, cells_to_write)
 
     return output_path
+
+
+def _parse_date_from_string(value: str) -> datetime | None:
+    """Estrae la data da stringhe come '1 del 07/04/25' o '2 del 09/04/2025'."""
+    match = re.search(r"(\d{2}/\d{2}/\d{2,4})", str(value))
+    if not match:
+        return None
+    date_str = match.group(1)
+    for fmt in ("%d/%m/%Y", "%d/%m/%y"):
+        try:
+            return datetime.strptime(date_str, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _get_most_recent_date_from_excel(excel_path: str, posizioni: list) -> str:
+    """
+    Legge il file Excel delle marcature e restituisce la data più recente
+    tra quelle associate alle posizioni indicate.
+
+    Colonna A: marcatura (es. T2, T4)
+    Colonna D: stringa data (es. '1 del 07/04/25')
+    """
+    if not excel_path or not posizioni or not os.path.isfile(excel_path):
+        return ""
+
+    posizioni_set = {str(p).strip().upper() for p in posizioni}
+
+    try:
+        wb = openpyxl.load_workbook(excel_path, data_only=True)
+        ws = wb.active
+    except Exception:
+        return ""
+
+    dates = []
+    for row in ws.iter_rows(values_only=True):
+        col_a = str(row[0]).strip().upper() if row[0] is not None else ""
+        col_d = row[3] if len(row) > 3 else None
+
+        if col_a in posizioni_set and col_d is not None:
+            # col_d può essere già un datetime (se la cella Excel è di tipo data)
+            if isinstance(col_d, datetime):
+                dates.append(col_d)
+            else:
+                parsed = _parse_date_from_string(str(col_d))
+                if parsed:
+                    dates.append(parsed)
+
+    if not dates:
+        return ""
+    return max(dates).strftime("%d/%m/%Y")
 
 
 def _col_to_num(col_str):
@@ -191,7 +278,11 @@ def _patch_xlsx(xlsx_path, cells_to_write):
 def get_cell_map() -> dict:
     """Restituisce la mappatura celle corrente per visualizzazione nella GUI."""
     return {
+        "Cliente (G2)": "cliente",
         "Elemento assiemato (D2)": "posizioni_stringa",
+        "N° commessa (D3)": "numero_commessa",
+        "Progetto (D4)": "progetto",
+        "Data collaudo (G6)": "data_collaudo",
         "Data controllo (G10)": "data_ddt",
         "Data compilazione (I14)": "data_ddt",
     }

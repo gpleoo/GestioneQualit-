@@ -40,6 +40,10 @@ class App(tk.Tk):
 
         self.pdf_paths = []  # lista di percorsi PDF
         self.excel_path = tk.StringVar()
+        self.marcature_excel_path = tk.StringVar()
+        self.numero_commessa = tk.StringVar()
+        self.progetto = tk.StringVar()
+        self.cliente = tk.StringVar()
         self.dop_data_list = []  # lista di (pdf_path, dop_data) ordinata per data
 
         self._build_ui()
@@ -84,6 +88,23 @@ class App(tk.Tk):
         ttk.Button(files_frame, text="Sfoglia...", command=self._browse_excel).grid(
             row=1, column=2, pady=5
         )
+
+        # Frame dati commessa
+        commessa_frame = ttk.LabelFrame(self, text="  Dati Commessa  ", padding=15)
+        commessa_frame.pack(fill=tk.X, padx=15, pady=(0, 5))
+
+        ttk.Label(commessa_frame, text="N° Commessa:").grid(row=0, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(commessa_frame, textvariable=self.numero_commessa, width=30).grid(row=0, column=1, padx=5, pady=4, sticky=tk.W)
+
+        ttk.Label(commessa_frame, text="Progetto:").grid(row=1, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(commessa_frame, textvariable=self.progetto, width=30).grid(row=1, column=1, padx=5, pady=4, sticky=tk.W)
+
+        ttk.Label(commessa_frame, text="Cliente:").grid(row=2, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(commessa_frame, textvariable=self.cliente, width=30).grid(row=2, column=1, padx=5, pady=4, sticky=tk.W)
+
+        ttk.Label(commessa_frame, text="Excel Marcature:").grid(row=3, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(commessa_frame, textvariable=self.marcature_excel_path, width=45).grid(row=3, column=1, padx=5, pady=4, sticky=tk.W)
+        ttk.Button(commessa_frame, text="Sfoglia...", command=self._browse_marcature_excel).grid(row=3, column=2, pady=4)
 
         # Pulsanti azione
         btn_frame = tk.Frame(self, bg="#f0f0f0")
@@ -160,6 +181,15 @@ class App(tk.Tk):
         else:
             self.pdf_label.configure(text=f"{n} PDF selezionati")
         self.status_var.set(f"{n} PDF selezionato/i.")
+
+    def _browse_marcature_excel(self):
+        path = filedialog.askopenfilename(
+            title="Seleziona il file Excel con le marcature e le date",
+            filetypes=[("File Excel", "*.xlsx *.xls"), ("Tutti i file", "*.*")],
+        )
+        if path:
+            self.marcature_excel_path.set(path)
+            self.status_var.set(f"Excel marcature selezionato: {os.path.basename(path)}")
 
     def _browse_excel(self):
         path = filedialog.askopenfilename(
@@ -288,10 +318,17 @@ class App(tk.Tk):
             base_name = os.path.splitext(os.path.basename(excel))[0]
             generated = []
 
+            manual_data = {
+                "numero_commessa": self.numero_commessa.get(),
+                "progetto": self.progetto.get(),
+                "cliente": self.cliente.get(),
+            }
+            marcature_path = self.marcature_excel_path.get()
+
             for idx, (pdf_path, data) in enumerate(self.dop_data_list, start=1):
                 output_name = f"{base_name}_{idx:03d}.xlsx"
                 output_path = os.path.join(output_dir, output_name)
-                fill_excel(excel, output_path, data)
+                fill_excel(excel, output_path, data, manual_data, marcature_path)
                 generated.append(output_name)
 
             self.status_var.set(f"{len(generated)} file Excel generati in {output_dir}")
