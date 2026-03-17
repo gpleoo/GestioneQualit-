@@ -54,6 +54,7 @@ def fill_excel(
     manual_data: dict = None,
     marcature_excel_path: str = "",
     numero_scheda: int = 0,
+    distinta_path: str = "",
 ) -> str:
     """
     Compila il file Excel template con i dati estratti dal PDF DOP.
@@ -67,6 +68,7 @@ def fill_excel(
         dop_data: Dizionario con i dati estratti dal PDF.
         manual_data: Dizionario con i campi inseriti manualmente (cliente, numero_commessa, progetto).
         marcature_excel_path: Percorso del file Excel con colonna A=marcature, D=date.
+        distinta_path: Percorso del file Excel 'Distinta Spedizione' (colonna A=marcature ammesse).
 
     Returns:
         Percorso del file salvato.
@@ -76,8 +78,18 @@ def fill_excel(
     if numero_scheda > 0:
         cells_to_write[CELL_MAP["numero_scheda"]] = f"{numero_scheda:03d}"
 
-    if dop_data.get("posizioni_stringa"):
+    # Filtra le posizioni in base alla Distinta Spedizione, se fornita
+    posizioni = dop_data.get("posizioni", [])
+    if distinta_path:
+        distinta_set = _get_marcature_from_distinta(distinta_path)
+        posizioni = [p for p in posizioni if p.upper() in distinta_set]
+
+    posizioni_stringa = "-".join(posizioni) if posizioni else ""
+    if posizioni_stringa:
+        cells_to_write[CELL_MAP["elemento_assiemato"]] = posizioni_stringa
+    elif dop_data.get("posizioni_stringa") and not distinta_path:
         cells_to_write[CELL_MAP["elemento_assiemato"]] = dop_data["posizioni_stringa"]
+
     if dop_data.get("data_ddt"):
         cells_to_write[CELL_MAP["data_controllo"]] = dop_data["data_ddt"]
         cells_to_write[CELL_MAP["data_compilazione"]] = dop_data["data_ddt"]
@@ -90,9 +102,9 @@ def fill_excel(
                 cells_to_write[CELL_MAP[field]] = val
 
     # Data più recente dal file Excel marcature → G6
-    if marcature_excel_path and dop_data.get("posizioni"):
+    if marcature_excel_path and posizioni:
         data_collaudo = _get_most_recent_date_from_excel(
-            marcature_excel_path, dop_data["posizioni"]
+            marcature_excel_path, posizioni
         )
         if data_collaudo:
             cells_to_write[CELL_MAP["data_collaudo"]] = data_collaudo
@@ -118,6 +130,27 @@ def _parse_date_from_string(value: str) -> datetime | None:
         except ValueError:
             continue
     return None
+
+
+def _get_marcature_from_distinta(distinta_path: str) -> set:
+    """
+    Legge il file Excel 'Distinta Spedizione' e restituisce l'insieme
+    delle marcature presenti nella colonna A.
+    """
+    if not distinta_path or not os.path.isfile(distinta_path):
+        return set()
+    try:
+        wb = openpyxl.load_workbook(distinta_path, data_only=True)
+        ws = wb.active
+    except Exception:
+        return set()
+
+    result = set()
+    for row in ws.iter_rows(values_only=True):
+        val = row[0] if row else None
+        if val is not None:
+            result.add(str(val).strip().upper())
+    return result
 
 
 def _get_most_recent_date_from_excel(excel_path: str, posizioni: list) -> str:

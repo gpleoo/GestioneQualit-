@@ -41,6 +41,7 @@ class App(tk.Tk):
         self.pdf_paths = []  # lista di percorsi PDF
         self.excel_path = tk.StringVar()
         self.marcature_excel_path = tk.StringVar()
+        self.distinta_path = tk.StringVar()
         self.numero_commessa = tk.StringVar()
         self.progetto = tk.StringVar()
         self.cliente = tk.StringVar()
@@ -105,6 +106,10 @@ class App(tk.Tk):
         ttk.Label(commessa_frame, text="Excel Marcature:").grid(row=3, column=0, sticky=tk.W, pady=4)
         ttk.Entry(commessa_frame, textvariable=self.marcature_excel_path, width=45).grid(row=3, column=1, padx=5, pady=4, sticky=tk.W)
         ttk.Button(commessa_frame, text="Sfoglia...", command=self._browse_marcature_excel).grid(row=3, column=2, pady=4)
+
+        ttk.Label(commessa_frame, text="Distinta Spedizione:").grid(row=4, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(commessa_frame, textvariable=self.distinta_path, width=45).grid(row=4, column=1, padx=5, pady=4, sticky=tk.W)
+        ttk.Button(commessa_frame, text="Sfoglia...", command=self._browse_distinta).grid(row=4, column=2, pady=4)
 
         # Pulsanti azione
         btn_frame = tk.Frame(self, bg="#f0f0f0")
@@ -190,6 +195,15 @@ class App(tk.Tk):
         if path:
             self.marcature_excel_path.set(path)
             self.status_var.set(f"Excel marcature selezionato: {os.path.basename(path)}")
+
+    def _browse_distinta(self):
+        path = filedialog.askopenfilename(
+            title="Seleziona il file Excel Distinta Spedizione",
+            filetypes=[("File Excel", "*.xlsx *.xls"), ("Tutti i file", "*.*")],
+        )
+        if path:
+            self.distinta_path.set(path)
+            self.status_var.set(f"Distinta Spedizione selezionata: {os.path.basename(path)}")
 
     def _browse_excel(self):
         path = filedialog.askopenfilename(
@@ -324,11 +338,12 @@ class App(tk.Tk):
                 "cliente": self.cliente.get(),
             }
             marcature_path = self.marcature_excel_path.get()
+            distinta_path = self.distinta_path.get()
 
             for idx, (pdf_path, data) in enumerate(self.dop_data_list, start=1):
                 output_name = f"{base_name}_{idx:03d}.xlsx"
                 output_path = os.path.join(output_dir, output_name)
-                fill_excel(excel, output_path, data, manual_data, marcature_path, idx)
+                fill_excel(excel, output_path, data, manual_data, marcature_path, idx, distinta_path)
                 generated.append(output_name)
 
             self.status_var.set(f"{len(generated)} file Excel generati in {output_dir}")
