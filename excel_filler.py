@@ -266,7 +266,7 @@ def _write_cell_raw(xml_str: str, cell_ref: str, value: str) -> str:
 
     match = cell_re.search(xml_str)
     if match:
-        attrs = match.group(1)
+        attrs = match.group(1).rstrip(" /")  # rimuove il / finale dei tag self-closing
         # Rimuovi tipo esistente (t="...") e attributi formula (cm=, vm=)
         attrs = re.sub(r'\s+t="[^"]*"', "", attrs)
         attrs = re.sub(r'\s+(?:cm|vm)="[^"]*"', "", attrs)
