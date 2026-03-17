@@ -263,9 +263,11 @@ def _write_cell_raw(xml_str: str, cell_ref: str, value: str) -> str:
     new_content = f'<is><t>{escaped}</t></is>'
 
     # Cerca la cella: <c ...r="REF"...>...</c>  oppure  <c ...r="REF".../>
-    # Usa lookahead per verificare la presenza di r="REF" nel tag di apertura
+    # Usa lookahead per verificare la presenza di r="REF" nel tag di apertura.
+    # IMPORTANTE: usa [^>]*? non-greedy e controlla /> PRIMA di >content</c>
+    # per evitare che i tag self-closing mangino le celle successive.
     cell_re = re.compile(
-        r'<c\b(?=[^>]*\br="' + re.escape(cell_ref) + r'")([^>]*)(?:>(.*?)</c>|/>)',
+        r'<c\b(?=[^>]*\br="' + re.escape(cell_ref) + r'")([^>]*?)(?:/>|>(.*?)</c>)',
         re.DOTALL,
     )
 
