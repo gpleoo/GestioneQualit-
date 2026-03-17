@@ -328,7 +328,7 @@ class App(tk.Tk):
             for idx, (pdf_path, data) in enumerate(self.dop_data_list, start=1):
                 output_name = f"{base_name}_{idx:03d}.xlsx"
                 output_path = os.path.join(output_dir, output_name)
-                fill_excel(excel, output_path, data, manual_data, marcature_path)
+                fill_excel(excel, output_path, data, manual_data, marcature_path, idx)
                 generated.append(output_name)
 
             self.status_var.set(f"{len(generated)} file Excel generati in {output_dir}")

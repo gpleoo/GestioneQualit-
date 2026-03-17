@@ -28,6 +28,7 @@ import openpyxl
 
 # Mappatura celle: chiave = nome campo, valore = cella Excel
 CELL_MAP = {
+    "numero_scheda":      "C1",
     "cliente":            "G2",
     "elemento_assiemato": "D2",
     "numero_commessa":    "D3",
@@ -46,6 +47,7 @@ def fill_excel(
     dop_data: dict,
     manual_data: dict = None,
     marcature_excel_path: str = "",
+    numero_scheda: int = 0,
 ) -> str:
     """
     Compila il file Excel template con i dati estratti dal PDF DOP.
@@ -64,6 +66,9 @@ def fill_excel(
         Percorso del file salvato.
     """
     cells_to_write = {}
+
+    if numero_scheda > 0:
+        cells_to_write[CELL_MAP["numero_scheda"]] = f"{numero_scheda:03d}"
 
     if dop_data.get("posizioni_stringa"):
         cells_to_write[CELL_MAP["elemento_assiemato"]] = dop_data["posizioni_stringa"]
