@@ -15,13 +15,11 @@ Mappatura celle Excel (basata sul template):
 - I14: Data compilazione
 """
 
-import io
 import os
 import re
 import shutil
 import zipfile
 from datetime import datetime
-from xml.etree import ElementTree as ET
 
 import openpyxl
 
@@ -197,89 +195,28 @@ def _find_sheet_path(zf):
     return "xl/worksheets/sheet1.xml"
 
 
+def _xml_escape(text: str) -> str:
+    """Escape minimo per contenuto testo XML."""
+    return (text
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;"))
+
+
 def _patch_xlsx(xlsx_path, cells_to_write):
-    """Modifica le celle specificate direttamente nell'XML del foglio xlsx."""
+    """
+    Modifica le celle specificate nel file xlsx manipolando direttamente
+    i byte XML, senza re-serializzare tramite ElementTree (che altera i
+    namespace e corrompe il file).
+    """
     tmp = xlsx_path + ".tmp"
 
     with zipfile.ZipFile(xlsx_path, "r") as zin:
         sheet_path = _find_sheet_path(zin)
         sheet_bytes = zin.read(sheet_path)
 
-        # Registra tutti i namespace per evitare prefissi ns0:
-        for _, (prefix, uri) in ET.iterparse(io.BytesIO(sheet_bytes), events=["start-ns"]):
-            ET.register_namespace(prefix if prefix else "", uri)
+        modified_sheet = _patch_sheet_raw(sheet_bytes, cells_to_write)
 
-        tree = ET.parse(io.BytesIO(sheet_bytes))
-        root = tree.getroot()
-
-        # Determina il namespace principale
-        ns = _NS
-        tag_match = re.match(r"\{(.+?)\}", root.tag)
-        if tag_match:
-            ns = tag_match.group(1)
-
-        # Leggi i range uniti (merged cells)
-        merge_ranges = []
-        mc_elem = root.find(f"{{{ns}}}mergeCells")
-        if mc_elem is not None:
-            for mc in mc_elem.findall(f"{{{ns}}}mergeCell"):
-                ref = mc.get("ref")
-                if ref:
-                    merge_ranges.append(ref)
-
-        # Risolvi celle unite -> scrivi nella cella principale
-        resolved = {}
-        for ref, val in cells_to_write.items():
-            resolved[_resolve_merge(ref, merge_ranges)] = val
-
-        # Modifica le celle
-        sheet_data = root.find(f"{{{ns}}}sheetData")
-        for ref, val in resolved.items():
-            _, row_num = _parse_cell_ref(ref)
-
-            # Trova la riga
-            row_el = None
-            for r in sheet_data.findall(f"{{{ns}}}row"):
-                if r.get("r") == str(row_num):
-                    row_el = r
-                    break
-            if row_el is None:
-                row_el = ET.SubElement(sheet_data, f"{{{ns}}}row")
-                row_el.set("r", str(row_num))
-
-            # Trova la cella
-            cell_el = None
-            for c in row_el.findall(f"{{{ns}}}c"):
-                if c.get("r") == ref:
-                    cell_el = c
-                    break
-            if cell_el is None:
-                cell_el = ET.SubElement(row_el, f"{{{ns}}}c")
-                cell_el.set("r", ref)
-
-            # Rimuovi valore/formula esistenti, mantieni stile
-            for child in list(cell_el):
-                ltag = child.tag.rsplit("}", 1)[-1]
-                if ltag in ("v", "f", "is"):
-                    cell_el.remove(child)
-
-            # Rimuovi attributi formula se presenti
-            for attr in ("cm", "vm"):
-                if attr in cell_el.attrib:
-                    del cell_el.attrib[attr]
-
-            # Scrivi come inline string
-            cell_el.set("t", "inlineStr")
-            is_el = ET.SubElement(cell_el, f"{{{ns}}}is")
-            t_el = ET.SubElement(is_el, f"{{{ns}}}t")
-            t_el.text = _sanitize(val)
-
-        # Serializza XML modificato
-        out_buf = io.BytesIO()
-        tree.write(out_buf, xml_declaration=True, encoding="UTF-8")
-        modified_sheet = out_buf.getvalue()
-
-        # Riscrivi il file xlsx con il foglio modificato
         with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
             for item in zin.infolist():
                 if item.filename == sheet_path:
@@ -288,6 +225,91 @@ def _patch_xlsx(xlsx_path, cells_to_write):
                     zout.writestr(item, zin.read(item.filename))
 
     os.replace(tmp, xlsx_path)
+
+
+def _patch_sheet_raw(sheet_bytes: bytes, cells_to_write: dict) -> bytes:
+    """
+    Modifica celle direttamente nella stringa XML preservando intatti
+    tutti i namespace, dichiarazioni e attributi originali.
+    """
+    xml_str = sheet_bytes.decode("utf-8")
+
+    # Estrai merge ranges dalla stringa XML senza parsare con ET
+    merge_ranges = re.findall(r'<mergeCell[^>]+ref="([^"]+)"', xml_str)
+
+    # Risolvi merged cells
+    resolved = {}
+    for ref, val in cells_to_write.items():
+        actual_ref = _resolve_merge(ref, merge_ranges)
+        resolved[actual_ref] = _sanitize(val)
+
+    for ref, val in resolved.items():
+        xml_str = _write_cell_raw(xml_str, ref, val)
+
+    return xml_str.encode("utf-8")
+
+
+def _write_cell_raw(xml_str: str, cell_ref: str, value: str) -> str:
+    """
+    Sostituisce o inserisce il valore di una cella direttamente
+    nella stringa XML, preservando attributi di stile (s=) esistenti.
+    """
+    escaped = _xml_escape(value)
+    new_content = f'<is><t>{escaped}</t></is>'
+
+    # Cerca la cella: <c ...r="REF"...>...</c>  oppure  <c ...r="REF".../>
+    # Usa lookahead per verificare la presenza di r="REF" nel tag di apertura
+    cell_re = re.compile(
+        r'<c\b(?=[^>]*\br="' + re.escape(cell_ref) + r'")([^>]*)(?:>(.*?)</c>|/>)',
+        re.DOTALL,
+    )
+
+    match = cell_re.search(xml_str)
+    if match:
+        attrs = match.group(1)
+        # Rimuovi tipo esistente (t="...") e attributi formula (cm=, vm=)
+        attrs = re.sub(r'\s+t="[^"]*"', "", attrs)
+        attrs = re.sub(r'\s+(?:cm|vm)="[^"]*"', "", attrs)
+        new_cell = f'<c{attrs} t="inlineStr">{new_content}</c>'
+        xml_str = xml_str[: match.start()] + new_cell + xml_str[match.end() :]
+        return xml_str
+
+    # Cella non trovata: inseriscila nella riga corrispondente
+    col_str, row_num = _parse_cell_ref(cell_ref)
+    col_num = _col_to_num(col_str)
+    new_cell = f'<c r="{cell_ref}" t="inlineStr">{new_content}</c>'
+
+    row_re = re.compile(
+        r'(<row\b(?=[^>]*\br="' + str(row_num) + r'")[^>]*>)(.*?)(</row>)',
+        re.DOTALL,
+    )
+    row_match = row_re.search(xml_str)
+    if row_match:
+        row_open = row_match.group(1)
+        row_body = row_match.group(2)
+        row_close = row_match.group(3)
+
+        # Inserisci prima della prima cella con colonna > col_num
+        insert_pos = len(row_body)
+        for cm in re.finditer(r'<c\b[^>]*\br="([A-Z]+)\d+"', row_body):
+            ec = _col_to_num(re.match(r"([A-Z]+)", cm.group(1)).group(1))
+            if ec > col_num:
+                insert_pos = cm.start()
+                break
+
+        row_body = row_body[:insert_pos] + new_cell + row_body[insert_pos:]
+        new_row = row_open + row_body + row_close
+        xml_str = xml_str[: row_match.start()] + new_row + xml_str[row_match.end() :]
+    else:
+        # Inserisci anche la riga in sheetData
+        sd_re = re.compile(r'(<sheetData[^>]*>)', re.DOTALL)
+        sd_match = sd_re.search(xml_str)
+        if sd_match:
+            new_row_el = f'<row r="{row_num}">{new_cell}</row>'
+            ins = sd_match.end()
+            xml_str = xml_str[:ins] + new_row_el + xml_str[ins:]
+
+    return xml_str
 
 
 def get_cell_map() -> dict:
