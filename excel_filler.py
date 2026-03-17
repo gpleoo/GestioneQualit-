@@ -36,8 +36,6 @@ CELL_MAP = {
     "data_compilazione":  "I14",
 }
 
-_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
-
 # Caratteri non validi in XML 1.0 (esclusi tab, newline, carriage return)
 _INVALID_XML_CHARS = re.compile(
     r"[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]"
@@ -170,7 +168,9 @@ def _col_to_num(col_str):
 
 def _parse_cell_ref(ref):
     """Splitta riferimento cella in (colonna_str, riga_int)."""
-    m = re.match(r"^([A-Z]+)(\d+)$", ref)
+    m = re.match(r"^([A-Z]+)(\d+)$", ref.upper())
+    if not m:
+        raise ValueError(f"Riferimento cella non valido: {ref!r}")
     return m.group(1), int(m.group(2))
 
 
@@ -211,20 +211,25 @@ def _patch_xlsx(xlsx_path, cells_to_write):
     """
     tmp = xlsx_path + ".tmp"
 
-    with zipfile.ZipFile(xlsx_path, "r") as zin:
-        sheet_path = _find_sheet_path(zin)
-        sheet_bytes = zin.read(sheet_path)
+    try:
+        with zipfile.ZipFile(xlsx_path, "r") as zin:
+            sheet_path = _find_sheet_path(zin)
+            sheet_bytes = zin.read(sheet_path)
 
-        modified_sheet = _patch_sheet_raw(sheet_bytes, cells_to_write)
+            modified_sheet = _patch_sheet_raw(sheet_bytes, cells_to_write)
 
-        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
-            for item in zin.infolist():
-                if item.filename == sheet_path:
-                    zout.writestr(item, modified_sheet)
-                else:
-                    zout.writestr(item, zin.read(item.filename))
+            with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
+                for item in zin.infolist():
+                    if item.filename == sheet_path:
+                        zout.writestr(item, modified_sheet)
+                    else:
+                        zout.writestr(item, zin.read(item.filename))
 
-    os.replace(tmp, xlsx_path)
+        os.replace(tmp, xlsx_path)
+    except Exception:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
 
 
 def _patch_sheet_raw(sheet_bytes: bytes, cells_to_write: dict) -> bytes:
@@ -266,7 +271,7 @@ def _write_cell_raw(xml_str: str, cell_ref: str, value: str) -> str:
 
     match = cell_re.search(xml_str)
     if match:
-        attrs = match.group(1)
+        attrs = match.group(1).rstrip(" /")  # rimuove il / finale dei tag self-closing
         # Rimuovi tipo esistente (t="...") e attributi formula (cm=, vm=)
         attrs = re.sub(r'\s+t="[^"]*"', "", attrs)
         attrs = re.sub(r'\s+(?:cm|vm)="[^"]*"', "", attrs)

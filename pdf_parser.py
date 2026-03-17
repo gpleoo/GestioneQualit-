@@ -61,7 +61,7 @@ def extract_dop_data(pdf_path: str) -> dict:
     # Estrai riferimento DDT e data
     # Pattern: Nr. 003/25 rif. DDT N° 140 DEL 09/05/2025
     ddt_match = re.search(
-        r"Nr\.\s*(\d+/\d+)\s*rif\.\s*DDT\s*N[°o]?\s*(\d+)\s*DEL\s*(\d{2}/\d{2}/\d{4})",
+        r"Nr\.\s*(\d+/\d+)\s*rif\.\s*DDT\s*N[°o]?\s*(\d+)\s*DEL\s*(\d{2}/\d{2}/\d{2,4})",
         full_text,
         re.IGNORECASE,
     )
@@ -92,7 +92,7 @@ def extract_dop_data(pdf_path: str) -> dict:
     if codice_section:
         section_text = codice_section.group(1)
         # Trova tutti i pattern POS. Txx o posizioni singole
-        pos_matches = re.findall(r"(?:POS\.?\s*)?([A-Z]\d{1,3})", section_text)
+        pos_matches = re.findall(r"POS\.?\s*([A-Z]\d{1,3})", section_text)
         posizioni = list(dict.fromkeys(pos_matches))  # rimuovi duplicati mantenendo ordine
 
     if not posizioni:
