@@ -40,6 +40,16 @@ CELL_MAP = {
 
 _NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 
+# Caratteri non validi in XML 1.0 (esclusi tab, newline, carriage return)
+_INVALID_XML_CHARS = re.compile(
+    r"[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]"
+)
+
+
+def _sanitize(text: str) -> str:
+    """Rimuove caratteri non validi per XML 1.0."""
+    return _INVALID_XML_CHARS.sub("", str(text))
+
 
 def fill_excel(
     template_path: str,
@@ -262,7 +272,7 @@ def _patch_xlsx(xlsx_path, cells_to_write):
             cell_el.set("t", "inlineStr")
             is_el = ET.SubElement(cell_el, f"{{{ns}}}is")
             t_el = ET.SubElement(is_el, f"{{{ns}}}t")
-            t_el.text = str(val)
+            t_el.text = _sanitize(val)
 
         # Serializza XML modificato
         out_buf = io.BytesIO()
