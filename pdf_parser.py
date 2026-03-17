@@ -91,13 +91,14 @@ def extract_dop_data(pdf_path: str) -> dict:
     )
     if codice_section:
         section_text = codice_section.group(1)
-        # Trova tutti i pattern POS. Txx o posizioni singole
-        pos_matches = re.findall(r"POS\.?\s*([A-Z]\d{1,3})", section_text)
+        # Trova tutti i codici posizione nella sezione (es. A65, A67, T38, C29...)
+        # inclusi quelli non preceduti da "POS." ma presenti nella lista
+        pos_matches = re.findall(r"\b([A-Z]\d{1,3})\b", section_text)
         posizioni = list(dict.fromkeys(pos_matches))  # rimuovi duplicati mantenendo ordine
 
     if not posizioni:
         # Fallback: cerca in tutto il testo
-        pos_matches = re.findall(r"POS\.?\s*([A-Z]\d{1,3})", full_text)
+        pos_matches = re.findall(r"\b([A-Z]\d{1,3})\b", full_text)
         posizioni = list(dict.fromkeys(pos_matches))
 
     data["posizioni"] = posizioni
