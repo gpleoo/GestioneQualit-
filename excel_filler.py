@@ -141,23 +141,42 @@ def _get_marcature_from_distinta(distinta_path: str) -> set:
     """
     Legge il file Excel 'Distinta Spedizione' e restituisce l'insieme
     delle marcature presenti nella colonna A (tutti i fogli).
-    Restituisce i codici normalizzati (uppercase, senza spazi/simboli).
+    Supporta sia .xlsx che .xls. Restituisce codici normalizzati.
     """
     if not distinta_path or not os.path.isfile(distinta_path):
         return set()
-    try:
-        wb = openpyxl.load_workbook(distinta_path, data_only=True)
-    except Exception:
-        return set()
 
     result = set()
-    for ws in wb.worksheets:
-        for row in ws.iter_rows(values_only=True):
-            val = row[0] if row else None
-            if val is not None:
-                normalized = _normalize_code(str(val))
-                if normalized:
-                    result.add(normalized)
+    ext = os.path.splitext(distinta_path)[1].lower()
+
+    if ext == ".xls":
+        # Formato vecchio: usa xlrd
+        try:
+            import xlrd
+            wb = xlrd.open_workbook(distinta_path)
+        except Exception:
+            return set()
+        for sheet in wb.sheets():
+            for row_idx in range(sheet.nrows):
+                val = sheet.cell_value(row_idx, 0)
+                if val:
+                    normalized = _normalize_code(str(val))
+                    if normalized:
+                        result.add(normalized)
+    else:
+        # Formato nuovo .xlsx: usa openpyxl
+        try:
+            wb = openpyxl.load_workbook(distinta_path, data_only=True)
+        except Exception:
+            return set()
+        for ws in wb.worksheets:
+            for row in ws.iter_rows(values_only=True):
+                val = row[0] if row else None
+                if val is not None:
+                    normalized = _normalize_code(str(val))
+                    if normalized:
+                        result.add(normalized)
+
     return result
 
 
