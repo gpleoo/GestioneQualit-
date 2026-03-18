@@ -26,14 +26,15 @@ import openpyxl
 
 # Mappatura celle: chiave = nome campo, valore = cella Excel
 CELL_MAP = {
-    "numero_scheda":      "C1",
-    "cliente":            "G2",
-    "elemento_assiemato": "D2",
-    "numero_commessa":    "D3",
-    "progetto":           "D4",
-    "data_collaudo":      "G6",
-    "data_controllo":     "G10",
-    "data_compilazione":  "I14",
+    "numero_scheda":          "C1",
+    "cliente":                "G2",
+    "elemento_assiemato":     "D2",
+    "numero_commessa":        "D3",
+    "progetto":               "D4",
+    "data_collaudo":          "G6",
+    "data_controllo":         "G10",
+    "data_compilazione":      "I14",
+    "responsabile_saldatura": "E10",
 }
 
 # Caratteri non validi in XML 1.0 (esclusi tab, newline, carriage return)
@@ -96,10 +97,15 @@ def fill_excel(
 
     # Dati inseriti manualmente dall'utente
     if manual_data:
-        for field in ("cliente", "numero_commessa", "progetto"):
+        for field in ("cliente", "numero_commessa", "progetto", "responsabile_saldatura"):
             val = manual_data.get(field, "").strip()
             if val:
                 cells_to_write[CELL_MAP[field]] = val
+
+        resp = manual_data.get("responsabile", "").strip()
+        if resp:
+            for cell in ("E6", "E7", "E8", "E9", "E11", "E12"):
+                cells_to_write[cell] = resp
 
     # Data più recente dal file Excel marcature → G6
     if marcature_excel_path and posizioni:
