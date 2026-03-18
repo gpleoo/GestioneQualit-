@@ -45,6 +45,8 @@ class App(tk.Tk):
         self.numero_commessa = tk.StringVar()
         self.progetto = tk.StringVar()
         self.cliente = tk.StringVar()
+        self.responsabile = tk.StringVar()
+        self.responsabile_saldatura = tk.StringVar()
         self.dop_data_list = []  # lista di (pdf_path, dop_data) ordinata per data
 
         self._build_ui()
@@ -103,13 +105,19 @@ class App(tk.Tk):
         ttk.Label(commessa_frame, text="Cliente:").grid(row=2, column=0, sticky=tk.W, pady=4)
         ttk.Entry(commessa_frame, textvariable=self.cliente, width=30).grid(row=2, column=1, padx=5, pady=4, sticky=tk.W)
 
-        ttk.Label(commessa_frame, text="Excel Marcature:").grid(row=3, column=0, sticky=tk.W, pady=4)
-        ttk.Entry(commessa_frame, textvariable=self.marcature_excel_path, width=45).grid(row=3, column=1, padx=5, pady=4, sticky=tk.W)
-        ttk.Button(commessa_frame, text="Sfoglia...", command=self._browse_marcature_excel).grid(row=3, column=2, pady=4)
+        ttk.Label(commessa_frame, text="Responsabile:").grid(row=3, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(commessa_frame, textvariable=self.responsabile, width=30).grid(row=3, column=1, padx=5, pady=4, sticky=tk.W)
 
-        ttk.Label(commessa_frame, text="Distinta Spedizione:").grid(row=4, column=0, sticky=tk.W, pady=4)
-        ttk.Entry(commessa_frame, textvariable=self.distinta_path, width=45).grid(row=4, column=1, padx=5, pady=4, sticky=tk.W)
-        ttk.Button(commessa_frame, text="Sfoglia...", command=self._browse_distinta).grid(row=4, column=2, pady=4)
+        ttk.Label(commessa_frame, text="Resp. Saldatura:").grid(row=4, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(commessa_frame, textvariable=self.responsabile_saldatura, width=30).grid(row=4, column=1, padx=5, pady=4, sticky=tk.W)
+
+        ttk.Label(commessa_frame, text="Excel Marcature:").grid(row=5, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(commessa_frame, textvariable=self.marcature_excel_path, width=45).grid(row=5, column=1, padx=5, pady=4, sticky=tk.W)
+        ttk.Button(commessa_frame, text="Sfoglia...", command=self._browse_marcature_excel).grid(row=5, column=2, pady=4)
+
+        ttk.Label(commessa_frame, text="Distinta Spedizione:").grid(row=6, column=0, sticky=tk.W, pady=4)
+        ttk.Entry(commessa_frame, textvariable=self.distinta_path, width=45).grid(row=6, column=1, padx=5, pady=4, sticky=tk.W)
+        ttk.Button(commessa_frame, text="Sfoglia...", command=self._browse_distinta).grid(row=6, column=2, pady=4)
 
         # Pulsanti azione
         btn_frame = tk.Frame(self, bg="#f0f0f0")
@@ -336,6 +344,8 @@ class App(tk.Tk):
                 "numero_commessa": self.numero_commessa.get(),
                 "progetto": self.progetto.get(),
                 "cliente": self.cliente.get(),
+                "responsabile": self.responsabile.get(),
+                "responsabile_saldatura": self.responsabile_saldatura.get(),
             }
             marcature_path = self.marcature_excel_path.get()
             distinta_path = self.distinta_path.get()
