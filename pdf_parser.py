@@ -12,6 +12,16 @@ import re
 from PyPDF2 import PdfReader
 
 
+def _normalize_date(date_str: str) -> str:
+    """Normalizza data DD/MM/YY -> DD/MM/YYYY. Se gia' 4 cifre, la lascia invariata."""
+    parts = date_str.split("/")
+    if len(parts) == 3 and len(parts[2]) == 2:
+        year = int(parts[2])
+        parts[2] = str(2000 + year) if year < 100 else parts[2]
+        return "/".join(parts)
+    return date_str
+
+
 def extract_dop_data(pdf_path: str) -> dict:
     """
     Estrae i dati principali dal PDF DOP.
@@ -58,17 +68,16 @@ def extract_dop_data(pdf_path: str) -> dict:
     if dop_match:
         data["numero_dop"] = dop_match.group(1)
 
-    # Estrai riferimento DDT e data
-    # Pattern: Nr. 003/25 rif. DDT N° 140 DEL 09/05/2025
+    # Estrai riferimento DOP e data
+    # Formato reale: Nr. 232/2025 DEL 08/09/2025
     ddt_match = re.search(
-        r"Nr\.\s*(\d+/\d+)\s*rif\.\s*DDT\s*N[°o]?\s*(\d+)\s*DEL\s*(\d{2}/\d{2}/\d{2,4})",
+        r"Nr\.?\s*(\d+/\d{2,4})\s*DEL\s*(\d{2}/\d{2}/\d{2,4})",
         full_text,
         re.IGNORECASE,
     )
     if ddt_match:
         data["nr_riferimento"] = ddt_match.group(1)
-        data["numero_ddt"] = ddt_match.group(2)
-        data["data_ddt"] = ddt_match.group(3)
+        data["data_ddt"] = _normalize_date(ddt_match.group(2))
 
     # Estrai tipo prodotto (es. ASCENSORE B)
     # Cerca dopo "prodotto-tipo" nella riga 1 della tabella

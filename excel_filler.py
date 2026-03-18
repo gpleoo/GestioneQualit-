@@ -6,13 +6,22 @@ Utilizza la modifica diretta dell'XML interno al file xlsx (ZIP)
 per preservare immagini, formule e formattazione del template originale.
 
 Mappatura celle Excel (basata sul template):
-- G2:  Cliente
+- C1:  Numero scheda (001, 002...)
 - D2:  Elemento assiemato (codici posizione)
 - D3:  N° commessa
 - D4:  Progetto
+- G2:  Cliente
+- E6-E9, E11-E12: Responsabile
+- E10: Responsabile saldatura
 - G6:  Data collaudo (più recente dal file Excel marcature)
-- G10: Data controllo (riga 5 - Esame visivo saldature)
-- I14: Data compilazione
+- G7:  = G6
+- G8:  = G6 + 2gg lavorativi
+- G9:  = G10 - 2gg lavorativi
+- G10: Data DOP (dal PDF)
+- G11: = G10
+- G12: = G10
+- I11: DDT + nr_riferimento
+- G14: Data compilazione (merge G14:I14)
 """
 
 import os
@@ -57,16 +66,25 @@ def _next_monday_if_weekend(d: datetime) -> datetime:
     return d
 
 
+def _parse_date(date_str: str) -> datetime | None:
+    """Parsa una data in formato DD/MM/YYYY o DD/MM/YY."""
+    for fmt in ("%d/%m/%Y", "%d/%m/%y"):
+        try:
+            return datetime.strptime(date_str, fmt)
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
 def _compute_g7_g8_g9(g6_str: str, g10_str: str) -> dict:
     """
     Calcola le date derivate G7, G8, G9 a partire da G6 e G10.
     Restituisce {} se le date non sono valide o l'ordine G6<=G7<G8<G9<G10 non è rispettato.
     """
     fmt = "%d/%m/%Y"
-    try:
-        g6  = datetime.strptime(g6_str, fmt)
-        g10 = datetime.strptime(g10_str, fmt)
-    except (ValueError, TypeError):
+    g6 = _parse_date(g6_str)
+    g10 = _parse_date(g10_str)
+    if not g6 or not g10:
         return {}
     g7 = g6
     g8 = _next_monday_if_weekend(g6  + timedelta(days=2))
@@ -241,7 +259,7 @@ def _get_most_recent_date_from_excel(excel_path: str, posizioni: list) -> str:
     if not excel_path or not posizioni or not os.path.isfile(excel_path):
         return ""
 
-    posizioni_set = {str(p).strip().upper() for p in posizioni}
+    posizioni_set = {_normalize_code(p) for p in posizioni}
 
     try:
         wb = openpyxl.load_workbook(excel_path, data_only=True)
@@ -251,7 +269,7 @@ def _get_most_recent_date_from_excel(excel_path: str, posizioni: list) -> str:
 
     dates = []
     for row in ws.iter_rows(values_only=True):
-        col_a = str(row[0]).strip().upper() if row[0] is not None else ""
+        col_a = _normalize_code(str(row[0])) if row[0] is not None else ""
         col_d = row[3] if len(row) > 3 else None
 
         if col_a in posizioni_set and col_d is not None:
@@ -437,8 +455,14 @@ def get_cell_map() -> dict:
         "N° commessa (D3)": "numero_commessa",
         "Progetto (D4)": "progetto",
         "Data collaudo (G6)": "data_collaudo",
+        "G7 = G6": "data_collaudo",
+        "G8 = G6+2gg lav.": "data_collaudo",
+        "G9 = G10-2gg lav.": "data_ddt",
         "Data controllo (G10)": "data_ddt",
-        "Data compilazione (I14)": "data_ddt",
+        "G11 = data DOP": "data_ddt",
+        "G12 = data DOP": "data_ddt",
+        "DDT riferimento (I11)": "nr_riferimento",
+        "Data compilazione (G14)": "data_ddt",
     }
 
 
