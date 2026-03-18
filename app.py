@@ -362,38 +362,41 @@ class App(tk.Tk):
                     )
                     return
                 else:
-                    empty_pdfs = []
-                    for pdf_path, data in self.dop_data_list:
-                        posizioni_pdf = data.get("posizioni", [])
-                        matched = [p for p in posizioni_pdf if _normalize_code(p) in distinta_set]
-                        if not matched:
-                            empty_pdfs.append(
-                                f"  {os.path.basename(pdf_path)}\n"
-                                f"    PDF: {posizioni_pdf if posizioni_pdf else '(nessuna marcatura trovata nel PDF)'}\n"
-                                f"    Distinta: {sorted(distinta_set)[:20]}"
-                            )
-                    if empty_pdfs:
-                        messagebox.showwarning(
-                            "Distinta Spedizione - Nessuna corrispondenza",
-                            "Per i seguenti PDF nessuna marcatura corrisponde alla Distinta.\n"
-                            "La cella D2 rimarrà vuota per queste schede.\n\n"
-                            + "\n\n".join(empty_pdfs)
-                        )
+                    pass  # le schede con D2 vuota verranno saltate nel loop
 
-            for idx, (pdf_path, data) in enumerate(self.dop_data_list, start=1):
-                output_name = f"{base_name}_{idx:03d}.xlsx"
+            skipped = []
+            scheda_num = 0
+            for pdf_path, data in self.dop_data_list:
+                # Determina le posizioni effettive per D2
+                posizioni = data.get("posizioni", [])
+                if distinta_path:
+                    posizioni_effettive = [p for p in posizioni if _normalize_code(p) in distinta_set]
+                else:
+                    posizioni_effettive = posizioni
+
+                # Se D2 sarebbe vuota → salta questa scheda
+                if not posizioni_effettive:
+                    skipped.append(os.path.basename(pdf_path))
+                    continue
+
+                scheda_num += 1
+                output_name = f"{base_name}_{scheda_num:03d}.xlsx"
                 output_path = os.path.join(output_dir, output_name)
-                fill_excel(excel, output_path, data, manual_data, marcature_path, idx, distinta_path)
+                fill_excel(excel, output_path, data, manual_data, marcature_path, scheda_num, distinta_path)
                 generated.append(output_name)
 
             self.status_var.set(f"{len(generated)} file Excel generati in {output_dir}")
 
             file_list = "\n".join(f"  {name}" for name in generated)
+            skip_msg = ""
+            if skipped:
+                skip_msg = f"\n\nSchede saltate (D2 vuota): {len(skipped)}\n" + "\n".join(f"  - {s}" for s in skipped)
             messagebox.showinfo(
                 "Completato",
                 f"{len(generated)} schede Excel generate con successo!\n\n"
                 f"Cartella: {output_dir}\n\n"
-                f"File generati:\n{file_list}",
+                f"File generati:\n{file_list}"
+                + skip_msg,
             )
         except Exception as e:
             messagebox.showerror("Errore compilazione", f"Errore durante la compilazione:\n{e}")
