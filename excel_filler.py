@@ -129,6 +129,9 @@ def fill_excel(
         cells_to_write["G11"] = dop_data["data_ddt"]
         cells_to_write["G12"] = dop_data["data_ddt"]
 
+    if dop_data.get("nr_riferimento"):
+        cells_to_write["I11"] = "DDT " + dop_data["nr_riferimento"]
+
     # Dati inseriti manualmente dall'utente
     if manual_data:
         for field in ("cliente", "numero_commessa", "progetto", "responsabile_saldatura"):
