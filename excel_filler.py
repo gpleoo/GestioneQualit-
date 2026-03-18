@@ -19,7 +19,7 @@ import os
 import re
 import shutil
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import openpyxl
 
@@ -46,6 +46,38 @@ _INVALID_XML_CHARS = re.compile(
 def _sanitize(text: str) -> str:
     """Rimuove caratteri non validi per XML 1.0."""
     return _INVALID_XML_CHARS.sub("", str(text))
+
+
+def _next_monday_if_weekend(d: datetime) -> datetime:
+    """Se d cade di sabato o domenica, avanza al lunedì successivo."""
+    if d.weekday() == 5:    # sabato → +2
+        return d + timedelta(days=2)
+    elif d.weekday() == 6:  # domenica → +1
+        return d + timedelta(days=1)
+    return d
+
+
+def _compute_g7_g8_g9(g6_str: str, g10_str: str) -> dict:
+    """
+    Calcola le date derivate G7, G8, G9 a partire da G6 e G10.
+    Restituisce {} se le date non sono valide o l'ordine G6<=G7<G8<G9<G10 non è rispettato.
+    """
+    fmt = "%d/%m/%Y"
+    try:
+        g6  = datetime.strptime(g6_str, fmt)
+        g10 = datetime.strptime(g10_str, fmt)
+    except (ValueError, TypeError):
+        return {}
+    g7 = g6
+    g8 = _next_monday_if_weekend(g6  + timedelta(days=2))
+    g9 = _next_monday_if_weekend(g10 - timedelta(days=2))
+    if not (g8 > g7 and g9 > g8 and g9 < g10):
+        return {}
+    return {
+        "G7": g7.strftime(fmt),
+        "G8": g8.strftime(fmt),
+        "G9": g9.strftime(fmt),
+    }
 
 
 def fill_excel(
@@ -114,6 +146,13 @@ def fill_excel(
         )
         if data_collaudo:
             cells_to_write[CELL_MAP["data_collaudo"]] = data_collaudo
+
+    # Date derivate: G7 = G6, G8 = G6+2gg, G9 = G10-2gg (con salto weekend)
+    g6_val  = cells_to_write.get(CELL_MAP["data_collaudo"], "")
+    g10_val = cells_to_write.get(CELL_MAP["data_controllo"], "")
+    if g6_val and g10_val:
+        derived = _compute_g7_g8_g9(g6_val, g10_val)
+        cells_to_write.update(derived)
 
     # Copia il template preservando tutto (immagini, macro, ecc.)
     shutil.copy2(template_path, output_path)
